@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Pezo</title><link rel="stylesheet" href="/app.css?v=1788689335">
+<style>
+.page{max-width:900px;margin:0 auto;padding:28px 24px 60px}
+.tbox{background:#fff;border:1.5px solid var(--bd);border-radius:20px;padding:16px;margin-bottom:14px}
+.tbox .row{display:flex;gap:10px;align-items:center;margin-bottom:10px}
+.opts{display:grid;grid-template-columns:1fr 160px;gap:16px;margin:24px 0}
+.bar{display:flex;gap:12px;align-items:center}
+.chk{display:flex;gap:8px;align-items:center;font-size:14px;color:var(--t1)}
+.chk input{width:auto}
+</style><script src="/settings.js?v=1788689335"></script>
+</head><body>
+<header><h1>Pezo</h1><span class="muted" id="modelinfo"></span></header>
+<div class="page">
+  <div id="settings"></div>
+  <div id="main-ui">
+  <p class="muted">Bước hiệu đính luôn chạy bằng model nhanh nhất; model chọn bên dưới dùng cho bước viết nội dung. Dán từng phần transcript. Mỗi transcript chạy 1 luồng riêng, ra 1 folder: file nội dung (.docx) + ảnh minh hoạ đặt tên theo mục + full transcript.</p>
+  <div id="boxes"></div>
+  <button class="ghost" onclick="addBox()">+ Thêm transcript</button>
+
+  <div class="opts">
+    <div><label>Model nội dung</label>
+      <select id="model">
+        <option value="gemini-3.7-flash">gemini-3.7-flash (cân bằng — mặc định)</option>
+        <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite (nhanh nhất)</option>
+        <option value="gemini-3.1-pro">gemini-3.1-pro (kỹ hơn)</option>
+        <option value="claude-sonnet-5">claude-sonnet-5 (văn tốt nhất, đắt hơn)</option>
+        <option value="deepseek-v4-pro">deepseek-v4-pro</option>
+      </select></div>
+    <div><label>Luồng song song</label><input id="workers" type="number" value="3" min="1" max="8"></div>
+  </div>
+  <div id="err" style="display:none;background:#FFF1F2;color:#B3121D;border:1.5px solid #F6C9CD;padding:12px 16px;border-radius:14px;margin-bottom:14px;font-weight:600"></div>
+  <div class="bar">
+    <button id="go" onclick="run()">Chạy</button>
+    <label class="chk" style="text-transform:none;color:var(--t1);margin:0"><input type="checkbox" id="mkimg" checked> Tạo ảnh minh hoạ luôn</label>
+  </div>
+  </div>
+</div>
+<script>
+fetch('/api/models').then(r=>r.json()).then(m=>{ modelinfo.textContent='ảnh: '+m.image_model; });
+let n=0;
+function addBox(){
+  n++; const d=document.createElement('div'); d.className='tbox';
+  d.innerHTML=`<div class="row"><input placeholder="Tên folder" value="${n}" style="flex:1">
+   <button class="ghost sm" onclick="this.closest('.tbox').remove()">Xoá</button></div>
+   <textarea rows="6" placeholder="Dán transcript thô ở đây..."></textarea>`;
+  boxes.appendChild(d);
+}
+addBox();
+PEZO.mount(()=>{ document.getElementById('main-ui').style.display = PEZO.hasKey()?'block':'none'; });
+async function run(){
+  const ts=[...document.querySelectorAll('#boxes .tbox')].map(b=>({
+    name:b.querySelector('input').value.trim(), text:b.querySelector('textarea').value.trim()})).filter(t=>t.text);
+  if(!PEZO.hasKey()){err.style.display='block';err.textContent='Chưa có API key Kyma. Điền key ở phần Cài đặt phía trên.';window.scrollTo({top:0,behavior:'smooth'});return}
+  if(!ts.length){alert('Chưa có transcript nào');return}
+  go.disabled=true; go.innerHTML='<span class=spin></span> Đang gửi';
+  const r=await PEZO.post('/api/run',{transcripts:ts,text_model:model.value,workers:+workers.value,make_images:mkimg.checked});
+  if(!r.ok){
+    let m='Lỗi '+r.status;
+    try{ m=(await r.json()).detail || m }catch(e){}
+    err.style.display='block'; err.textContent=m;
+    go.disabled=false; go.textContent='Chạy'; return;
+  }
+  location.href='/result.html?run='+(await r.json()).run_id;
+}
+</script></body></html>

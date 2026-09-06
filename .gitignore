@@ -1,0 +1,6 @@
+.venv/
+runs/
+.kyma_key
+__pycache__/
+server.log
+.DS_Store

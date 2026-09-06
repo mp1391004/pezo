@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="vi"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Kết quả — Pezo</title><link rel="stylesheet" href="/app.css?v=1788689335">
+<style>
+.wrap{display:grid;grid-template-columns:230px 1fr;min-height:calc(100vh - 55px)}
+.side{border-right:1px solid var(--bdl);background:var(--bluePale);padding:16px}
+.jitem{padding:10px 12px;border-radius:14px;cursor:pointer;margin-bottom:6px;border:1.5px solid transparent}
+.jitem.active{background:#fff;border-color:var(--bd)}
+.jitem b{display:block;font-size:14px}
+.main{padding:20px 28px 80px;max-width:920px}
+.tabs{display:flex;gap:8px;margin-bottom:16px}
+.tabs button{padding:6px 16px;font-size:13.5px}
+.tabs button:not(.active){background:#fff;color:var(--blue)}
+.doc{border:1.5px solid var(--bd);border-radius:20px;padding:28px 32px;outline:none;background:#fff;min-height:320px}
+.doc:focus-within{border-color:var(--blue)}
+.doc h2{font-size:22px;color:var(--navy);margin:30px 0 12px;padding-top:4px}
+.doc h2:first-child{margin-top:0}
+.doc h3{font-size:17px;color:var(--blue);margin:22px 0 8px}
+.doc p{margin:10px 0}
+.doc ul{margin:10px 0;padding-left:22px}
+.doc li{margin:4px 0}
+.doc blockquote{margin:14px 0;padding:12px 18px;border-left:3px solid var(--blue);background:var(--bluePale);border-radius:0 12px 12px 0;font-weight:600;color:var(--navy)}
+.doc hr{border:0;border-top:1px solid var(--bdl);margin:26px 0}
+.doc code{background:var(--blueLight);padding:1px 6px;border-radius:6px;font-size:13px}
+.illu{border:1.5px solid var(--bd);border-radius:18px;margin:18px 0;overflow:hidden;background:var(--surf)}
+.illu-head{display:flex;align-items:center;gap:10px;padding:9px 14px;border-bottom:1px solid var(--bdl);background:var(--blueLight)}
+.illu-head .t{font-size:11.5px;font-weight:800;letter-spacing:.05em;color:var(--blue);white-space:nowrap}
+.illu-name{width:auto;flex:0 1 300px;padding:4px 10px;font-size:12.5px;border-radius:8px;border:1.5px solid var(--bd);font-family:Menlo,monospace}
+.illu-name:focus{border-color:var(--blue);outline:none}
+.tb{display:flex;gap:6px;flex-wrap:wrap;align-items:center;padding:8px 10px;border:1.5px solid var(--bd);border-bottom:0;border-radius:16px 16px 0 0;background:var(--bluePale);position:sticky;top:55px;z-index:6}
+.tb button{padding:5px 11px;font-size:13px;background:#fff;color:var(--navy);border-color:var(--bd);font-weight:700}
+.tb button:hover{border-color:var(--blue);color:var(--blue)}
+.tb .sep{width:1px;height:20px;background:var(--bd);margin:0 3px}
+.doc{border-radius:0 0 20px 20px}
+.doc h1{font-size:26px;color:var(--navy);margin:24px 0 12px}
+.doc h1:first-child{margin-top:0}
+.doc a{color:var(--blue)}
+.illu-desc{padding:12px 16px;font-size:13.5px;color:var(--t2);font-style:italic;outline:none}
+.illu-desc:focus{background:#fff}
+.illu-img{padding:0 16px 14px}
+.illu-img img{width:100%;border:1.5px solid var(--bd);border-radius:14px;display:block}
+.ph{padding:34px;text-align:center;color:var(--t2);font-size:13px;font-style:normal}
+.bar{position:sticky;bottom:0;background:#fff;border-top:1px solid var(--bdl);padding:14px 0;display:flex;gap:10px;align-items:center;margin-top:18px;flex-wrap:wrap}
+.hint{font-size:12.5px;color:var(--t2)}
+</style><script src="/settings.js?v=1788689335"></script>
+</head><body>
+<header><h1>Pezo</h1><span class="muted" id="stat"></span><span class="spacer"></span>
+<a href="/" class="muted">← Chạy transcript mới</a>
+<button class="ghost" id="dlall">Tải toàn bộ (.zip)</button></header>
+<div class="wrap"><div class="side" id="side"></div><div class="main" id="main"></div></div>
+<script src="/md.js?v=1788689335"></script>
+<script>
+const runId=new URLSearchParams(location.search).get('run');
+let jobs=[], cur=0, tab='content', loaded={}, dirty={}, poll=null;
+
+function esc(s){return (s||'').replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]))}
+
+async function tick(){
+  let d;
+  try{
+    const r=await fetch('/api/status/'+runId);
+    if(!r.ok) throw new Error(r.status===404?'Phiên này không còn trên server (server đã khởi động lại). Kết quả cũ vẫn nằm trong thư mục runs/.':'Lỗi '+r.status);
+    d=await r.json();
+    if(!d.jobs) throw new Error('Dữ liệu không hợp lệ');
+  }catch(e){
+    clearInterval(poll); poll=null;
+    stat.innerHTML='<span style="color:var(--dan)">'+e.message+'</span>';
+    return;
+  }
+  jobs=d.jobs; renderSide();
+  const j=jobs[cur];
+  if(j && j.content_md && !loaded[j.id]){ loaded[j.id]=true; renderMain(); }
+  else { syncImages(); updateStat(); }
+  if(jobs.every(x=>x.status==='done'||x.status==='error')){clearInterval(poll);poll=null}
+}
+function updateStat(){
+  const run=jobs.filter(j=>j.status==='running'||j.status==='queued').length;
+  stat.innerHTML = run? `<span class=spin style="border-top-color:var(--blue)"></span> ${run} transcript đang chạy` : 'Đã xong tất cả';
+}
+function renderSide(){
+  side.innerHTML=jobs.map((j,i)=>{
+    const nimg=(j.illustrations||[]).filter(x=>x.status!=='deleted').length;
+    return `<div class="jitem ${i===cur?'active':''}" onclick="pick(${i})"><b>${esc(j.name)}</b>
+      <span class="badge ${j.status}">${j.status==='running'?'<span class=spin></span> ':''}${esc(j.stage)}</span>
+      <div class="muted" style="margin-top:4px">${nimg} ảnh${j.elapsed?' · '+j.elapsed+'s':(j.started?' · '+Math.round(Date.now()/1000-j.started)+'s':'')}</div></div>`}).join('');
+  updateStat();
+}
+function pick(i){ if(dirty[jobs[cur].id]) saveCurrent(); cur=i; renderMain(); renderSide(); }
+
+function renderMain(){
+  const j=jobs[cur]; if(!j)return;
+  if(!j.content_md && j.status!=='error' && !j.interrupted){
+    main.innerHTML=`<p class="muted"><span class=spin style="border-top-color:var(--blue)"></span> ${esc(j.stage)}…</p>`; return;
+  }
+  main.innerHTML=`
+   <div class="tabs">
+     <button class="${tab==='content'?'active':''}" onclick="setTab('content')">Nội dung</button>
+     <button class="${tab==='script'?'active':''}" onclick="setTab('script')">Full transcript</button>
+   </div>
+   ${j.error?`<p style="color:var(--dan)">${esc(j.error)}</p>`:''}
+   ${j.interrupted?`<p><button onclick="retryJob('${j.id}')">Chạy lại transcript này</button></p>`:''}
+   ${(j.warnings||[]).length?`<p style="background:#FFF8E8;color:#8a5a00;padding:10px 14px;border-radius:12px;font-size:13.5px">${j.warnings.map(esc).join('<br>')}</p>`:''}
+   <div id="editor"></div>
+   <input type="file" id="filepick" accept="image/*" style="display:none">
+   <div class="bar">
+     <button class="ghost" onclick="saveCurrent(1)">Lưu</button>
+     <button class="ghost" onclick="resync()">Lưu + cập nhật ảnh</button>
+     <button onclick="dl()">Chốt &amp; tải folder này</button>
+     <span class="hint" id="savehint"></span>
+   </div>`;
+  if(tab==='script'){
+    editor.innerHTML=`<textarea id="scriptta" rows="26"></textarea>`;
+    scriptta.value=j.script||'';
+    scriptta.oninput=()=>{dirty[j.id]=1};
+  }else{
+    editor.innerHTML=`<div class="tb">
+      <button type="button" onmousedown="return fmt(event,'formatBlock','h1')">H1</button>
+      <button type="button" onmousedown="return fmt(event,'formatBlock','h2')">H2</button>
+      <button type="button" onmousedown="return fmt(event,'formatBlock','h3')">H3</button>
+      <button type="button" onmousedown="return fmt(event,'formatBlock','p')">Đoạn</button>
+      <span class="sep"></span>
+      <button type="button" onmousedown="return fmt(event,'bold')"><b>B</b></button>
+      <button type="button" onmousedown="return fmt(event,'italic')"><i>I</i></button>
+      <button type="button" onmousedown="return fmt(event,'insertUnorderedList')">• Gạch đầu dòng</button>
+      <button type="button" onmousedown="return fmt(event,'formatBlock','blockquote')">❝ Trích</button>
+      <span class="sep"></span>
+      <button type="button" onmousedown="return addLink(event)">Chèn link</button>
+      <button type="button" onmousedown="return insertImage(event)">Chèn ảnh từ máy</button>
+      <button type="button" onmousedown="return fmt(event,'removeFormat')">Xoá định dạng</button>
+    </div>`;
+    const d=document.createElement('div');
+    d.className='doc'; d.id='doc'; d.contentEditable='true';
+    d.appendChild(MD.toDom(j.content_md, j));
+    d.addEventListener('input',()=>{dirty[j.id]=1});
+    editor.appendChild(d);
+  }
+  loaded[j.id]=true;
+}
+function setTab(t){ if(dirty[jobs[cur].id]) saveCurrent(); tab=t; renderMain(); }
+
+/* Chi cap nhat o anh, khong dung toi text dang sua */
+function syncImages(){
+  const j=jobs[cur]; if(!j||tab!=='content')return;
+  (j.illustrations||[]).forEach(it=>{
+    const card=document.querySelector(`.illu[data-file="${it.filename}"]`);
+    if(card) MD.paintImage(card,it,j);
+  });
+}
+
+async function saveCurrent(showHint){
+  const j=jobs[cur]; if(!j)return;
+  const body = tab==='script' ? {script:document.getElementById('scriptta').value}
+                              : {content_md:MD.fromDom(document.getElementById('doc'))};
+  await fetch(`/api/job/${j.id}/save`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+  if(tab==='script') j.script=body.script; else j.content_md=body.content_md;
+  dirty[j.id]=0;
+  if(showHint&&window.savehint){savehint.textContent='Đã lưu';setTimeout(()=>savehint.textContent='',2000)}
+}
+async function resync(){
+  await saveCurrent();
+  await PEZO.post(`/api/job/${jobs[cur].id}/resync-images`);
+  if(!poll) poll=setInterval(tick,3000);
+  tick();
+}
+async function dl(){ await saveCurrent(); location.href=`/api/job/${jobs[cur].id}/download?t=${Date.now()}`; }
+dlall.onclick=async()=>{ await saveCurrent(); location.href='/api/download/'+runId+'?t='+Date.now(); };
+
+let savedRange=null;
+function keepRange(){
+  const s=window.getSelection();
+  if(s&&s.rangeCount&&document.getElementById('doc')&&document.getElementById('doc').contains(s.anchorNode))
+    savedRange=s.getRangeAt(0).cloneRange();
+}
+document.addEventListener('selectionchange',keepRange);
+function restoreRange(){
+  const doc=document.getElementById('doc'); if(!doc)return null;
+  doc.focus();
+  if(savedRange){const s=window.getSelection();s.removeAllRanges();s.addRange(savedRange)}
+  return doc;
+}
+window.fmt=(e,cmd,arg)=>{
+  e.preventDefault();
+  restoreRange();
+  document.execCommand(cmd,false,arg);
+  document.getElementById('doc').dispatchEvent(new Event('input'));
+  return false;
+};
+window.addLink=(e)=>{
+  e.preventDefault();
+  restoreRange();
+  const sel=window.getSelection();
+  const has=sel && sel.toString().trim();
+  const url=prompt('Dán link (https://...)');
+  if(!url)return false;
+  if(has) document.execCommand('createLink',false,url);
+  else{
+    const text=prompt('Chữ hiển thị cho link','')||url;
+    document.execCommand('insertHTML',false,`<a href="${url}">${text}</a>`);
+  }
+  document.getElementById('doc').dispatchEvent(new Event('input'));
+  return false;
+};
+window.insertImage=(e)=>{
+  e.preventDefault();
+  restoreRange();
+  const fp=document.getElementById('filepick');
+  fp.value='';
+  fp.onchange=async()=>{
+    const f=fp.files[0]; if(!f)return;
+    const j=jobs[cur];
+    const name=prompt('Đặt tên file ảnh (bỏ trống thì lấy tên gốc)','')||f.name;
+    const fd=new FormData(); fd.append('file',f); fd.append('name',name); fd.append('section','1');
+    const r=await fetch(`/api/job/${j.id}/upload-image`,{method:'POST',body:fd});
+    if(!r.ok){alert('Không tải ảnh lên được: '+(await r.text()));return}
+    const {filename}=await r.json();
+    const it={filename,status:'done',v:Date.now(),source:'upload'};
+    j.illustrations.push(it);
+    const card=MD.illuCard('upload',filename,'',it,j);
+    const doc=restoreRange();
+    const sel=window.getSelection();
+    let node=sel&&sel.anchorNode?sel.anchorNode:null;
+    while(node&&node.parentNode!==doc) node=node.parentNode;
+    if(node&&node.parentNode===doc) node.after(card); else doc.appendChild(card);
+    card.after(document.createElement('p'));
+    doc.dispatchEvent(new Event('input'));
+    await saveCurrent();
+  };
+  fp.click();
+  return false;
+};
+window.renameImage=async(oldName,newName,card)=>{
+  newName=(newName||'').trim();
+  if(!newName||newName===oldName){card.querySelector('.illu-name').value=oldName;return}
+  const r=await fetch(`/api/job/${jobs[cur].id}/image/${encodeURIComponent(oldName)}/rename`,
+    {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:newName})});
+  if(!r.ok){alert('Không đổi tên được');card.querySelector('.illu-name').value=oldName;return}
+  const {filename}=await r.json();
+  card.dataset.file=filename;
+  card.querySelector('.illu-name').value=filename;
+  const it=jobs[cur].illustrations.find(i=>i.filename===oldName);
+  if(it){it.filename=filename;it.v=Date.now();card.dataset.stamp='';MD.paintImage(card,it,jobs[cur])}
+  document.getElementById('doc').dispatchEvent(new Event('input'));
+  await saveCurrent();
+};
+window.swapImage=(f,card)=>{
+  const fp=document.getElementById('filepick');
+  fp.value='';
+  fp.onchange=async()=>{
+    const file=fp.files[0]; if(!file)return;
+    const fd=new FormData(); fd.append('file',file);
+    const r=await fetch(`/api/job/${jobs[cur].id}/image/${encodeURIComponent(f)}/replace`,{method:'POST',body:fd});
+    if(!r.ok){alert('Không thay được ảnh');return}
+    card.dataset.kind='upload';
+    card.querySelector('.t').textContent='ẢNH TỰ CHÈN';
+    const rg=card.querySelector('[data-a="regen"]'); if(rg) rg.remove();
+    const it=jobs[cur].illustrations.find(i=>i.filename===f);
+    if(it){it.status='done';it.source='upload';it.v=Date.now();card.dataset.stamp='';MD.paintImage(card,it,jobs[cur])}
+    document.getElementById('doc').dispatchEvent(new Event('input'));
+    await saveCurrent();
+  };
+  fp.click();
+};
+window.retryJob=async(id)=>{
+  await PEZO.post(`/api/job/${id}/retry`);
+  loaded[id]=false; if(!poll) poll=setInterval(tick,3000); tick();
+};
+window.regenImage=async(f)=>{
+  await PEZO.post(`/api/job/${jobs[cur].id}/image/${encodeURIComponent(f)}/regen`);
+  if(!poll) poll=setInterval(tick,3000); tick();
+};
+window.deleteImage=async(f,card)=>{
+  if(!confirm('Xoá mục minh hoạ này? Ảnh sẽ không nằm trong file tải về.'))return;
+  await fetch(`/api/job/${jobs[cur].id}/image/${encodeURIComponent(f)}/delete`,{method:'POST'});
+  card.remove(); dirty[jobs[cur].id]=1; saveCurrent();
+};
+tick(); poll=setInterval(tick,3000); setInterval(()=>{if(poll)renderSide()},1000);
+window.addEventListener('beforeunload',e=>{ if(Object.values(dirty).some(Boolean)){e.preventDefault();e.returnValue=''} });
+</script></body></html>
