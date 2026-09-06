@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="420" height="120" viewBox="0 0 420 120" role="img" aria-labelledby="title">
+  <title id="title">Pezo</title>
+  <rect width="420" height="120" rx="24" fill="#fff"/>
+  <g transform="translate(18 22)" fill="none" stroke="#2463EB" stroke-width="7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M10 42c0-18 14-32 32-32s32 14 32 32-14 32-32 32H10V42Z"/>
+    <path d="M28 30h22a12 12 0 0 1 0 24H28"/>
+    <path d="m60 10 14 0 0 14"/>
+  </g>
+  <text x="106" y="82" fill="#2463EB" font-family="Manrope,Arial,sans-serif" font-size="72" font-weight="800" letter-spacing="-4">pezo.</text>
+</svg>
