@@ -104,6 +104,14 @@ app.get('/api/site',wrap(async(req,res)=>{const settings={},content={};for(const
 app.post('/api/visit',wrap(async(req,res)=>{await db.q('INSERT INTO visits(path,ua) VALUES($1,$2)',[String(req.body?.path||'/').slice(0,200),String(req.headers['user-agent']||'').slice(0,200)]);res.json({ok:true})}));
 app.get('/api/admin/stats',admin,wrap(async(req,res)=>{const n=async sql=>Number((await db.one(sql))?.n||0);res.json({leads:await n('SELECT COUNT(*) n FROM users'),newLeads:await n("SELECT COUNT(*) n FROM orders WHERE status='PENDING'"),leads7:await n("SELECT COUNT(*) n FROM orders WHERE status='PAID'"),visits:await n('SELECT COUNT(*) n FROM visits'),leadsTest:0,daily:[],byPack:[]})}));
 app.get('/api/admin/leads',admin,wrap(async(req,res)=>res.json(await db.q("SELECT id,name,email,'' phone,'Pezo trọn đời' pack,'' flavour,CASE WHEN paid=1 THEN 'won' ELSE 'new' END status,'' note,0 is_test,created_at FROM users ORDER BY id DESC"))));
+app.post('/api/admin/users/:id/access',admin,wrap(async(req,res)=>{
+  const id=Number(req.params.id);
+  if(!Number.isSafeInteger(id)||id<1||typeof req.body?.paid!=='boolean')return res.status(400).json({error:'Yêu cầu cấp quyền không hợp lệ.'});
+  const found=await db.one('SELECT id,email FROM users WHERE id=$1',[id]);
+  if(!found)return res.status(404).json({error:'Không tìm thấy khách hàng.'});
+  await db.q('UPDATE users SET paid=$1 WHERE id=$2',[req.body.paid?1:0,id]);
+  res.json({ok:true,paid:req.body.paid,email:found.email});
+}));
 app.get('/api/admin/content',admin,wrap(async(req,res)=>{const out={};for(const r of await db.q('SELECT key,value FROM content ORDER BY key'))out[r.key]=r.value;res.json(out)}));
 function safeUrl(v){v=String(v||'').trim();return /^(https?:|mailto:|tel:|\/|data:image\/)/i.test(v)?v:''}
 function sanitizeHtml(input){let html=String(input||'').replace(/<!--[\s\S]*?-->/g,'').replace(/<(script|style|iframe|object|embed|form|svg)[\s\S]*?<\/\1\s*>/gi,'').replace(/<(script|style|iframe|object|embed|form|svg)\b[^>]*\/?>/gi,'');const allowed={p:[],br:[],b:[],strong:[],i:[],em:[],u:[],h1:[],h2:[],h3:[],h4:[],ul:[],ol:[],li:[],blockquote:[],div:[],span:[],a:['href'],img:['src','alt']};return html.replace(/<(\/?)([a-zA-Z0-9]+)((?:\s[^>]*)?)\/?>/g,(all,close,raw,attrs)=>{const tag=raw.toLowerCase(),ok=allowed[tag];if(!ok)return'';if(close)return`</${tag}>`;const kept=[];for(const m of attrs.matchAll(/([a-zA-Z-]+)\s*=\s*("([^"]*)"|'([^']*)')/g)){const name=m[1].toLowerCase();if(!ok.includes(name))continue;let val=m[3]??m[4]??'';if((name==='href'||name==='src')&&!(val=safeUrl(val)))continue;kept.push(`${name}="${val.replace(/"/g,'&quot;')}"`)}if(tag==='a'){const h=kept.find(x=>x.startsWith('href='));return h?`<a ${h} target="_blank" rel="noopener noreferrer">`:''}if(tag==='img'){const s=kept.find(x=>x.startsWith('src='));return s?`<img ${s} ${kept.find(x=>x.startsWith('alt='))||'alt=""'}>`:''}return kept.length?`<${tag} ${kept.join(' ')}>`:`<${tag}>`}).trim()}
