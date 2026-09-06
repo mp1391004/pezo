@@ -33,7 +33,13 @@ Pezo dùng API của [Kyma](https://kymaapi.com?aff=deal) — một cổng dùng
 
 Key được lưu trong `localStorage` của trình duyệt bạn, gửi kèm từng request tới server chạy trên máy bạn. Key không ghi xuống đĩa và không nằm trong file kết quả.
 
-Nếu tự host cho riêng mình, có thể đặt sẵn biến môi trường `KYMA_API_KEY` thay cho việc nhập trong trình duyệt.
+Nếu tự host cho riêng mình, có thể đặt sẵn biến môi trường `KYMA_API_KEY` thay cho việc nhập trong trình duyệt — xem `.env.example`.
+
+**Đừng dán key vào code, vào chat hay vào issue.** Key đã lọt ra chỗ khác thì coi như lộ: vào [kymaapi.com/keys](https://kymaapi.com/keys) thu hồi key cũ và tạo key mới. Repo có sẵn hook `gitleaks` chặn commit nhầm — bật bằng:
+
+```bash
+pre-commit install
+```
 
 ## Quy trình
 

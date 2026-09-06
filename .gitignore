@@ -1,6 +1,15 @@
 .venv/
 runs/
-.kyma_key
 __pycache__/
 server.log
 .DS_Store
+
+# Secrets — khong bao gio commit
+.env
+.env.*
+!.env.example
+.envrc
+.envrc.local
+.kyma_key
+*.key
+*.pem
