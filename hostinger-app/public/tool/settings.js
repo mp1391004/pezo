@@ -1,4 +1,14 @@
 /* Cai dat API key Kyma — luu tren trinh duyet cua tung nguoi dung. */
+fetch('/api/site').then(r => r.json()).then(({ settings }) => {
+  const href = settings && settings['img.favicon'];
+  if (!href) return;
+  document.querySelectorAll('link[rel~="icon"]').forEach(link => link.remove());
+  const icon = document.createElement('link');
+  icon.rel = 'icon';
+  icon.href = href;
+  document.head.appendChild(icon);
+}).catch(() => {});
+
 const PEZO = (() => {
   const LS = 'pezo_kyma_key';
   const get = () => { try { return localStorage.getItem(LS) || ''; } catch (e) { return ''; } };
