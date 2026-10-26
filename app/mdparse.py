@@ -107,13 +107,28 @@ def collect_illustrations(md: str):
     return out
 
 
+FM_RE = re.compile(r"^---[ \t]*\n(title:[^\n]*)\n---[ \t]*$\n?", re.I | re.M)
+
+
+def split_front(md: str):
+    """Tach khoi '---\ntitle: ...\n---' dau file -> (title, phan con lai)."""
+    m = FM_RE.search(md or "")
+    if not m:
+        return None, md or ""
+    return m.group(1).split(":", 1)[1].strip(), (md or "")[m.end():]
+
+
 def strip_head(md: str) -> str:
-    """Bo tieu de tong + doan disclaimer dau file, vao thang muc 1."""
-    lines = (md or "").splitlines()
+    """Giu khoi title dau file, bo moi thu thua truoc muc ## dau tien."""
+    title, body = split_front(md)
+    lines = body.splitlines()
     for i, l in enumerate(lines):
         if l.strip().startswith("## "):
-            return "\n".join(lines[i:]).strip()
-    return (md or "").strip()
+            body = "\n".join(lines[i:]).strip()
+            break
+    else:
+        body = body.strip()
+    return f"---\ntitle: {title}\n---\n{body}" if title else body
 
 
 def annotate_filenames(md: str) -> str:
@@ -130,7 +145,7 @@ def annotate_filenames(md: str) -> str:
             continue
         if k < len(items):
             name = items[k]["filename"]
-            label = "**[ẢNH TỰ CHÈN]**" if kind == "upload" else "**[MINH HOẠ — NÊN CÓ]**"
+            label = "**[ẢNH TỰ CHÈN]**" if kind == "upload" else "**[MINH HOẠ - NÊN CÓ]**"
             lines[i] = f"{label} `{name}`"
             k += 1
     return "\n".join(lines)

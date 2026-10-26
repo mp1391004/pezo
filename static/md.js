@@ -1,7 +1,7 @@
 /* Markdown <-> DOM cho editor co dinh dang. */
 const MD = (() => {
   const esc = s => (s || '').replace(/[&<>]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));
-  const AI_LABEL = 'MINH HOẠ — NÊN CÓ';
+  const AI_LABEL = 'MINH HOẠ - NÊN CÓ';
   const UP_LABEL = 'ẢNH TỰ CHÈN';
   const ILL = /^\**\[MINH\s*HO[ẠA]\s*[—\-–]\s*N[ÊE]N\s*C[ÓO]\]\**\s*(?:`([^`]+)`)?\s*$/i;
   const UP  = /^\**\[[ẢA]NH\s*T[ỰU]\s*CH[ÈE]N\]\**\s*(?:`([^`]+)`)?\s*$/i;
@@ -164,7 +164,8 @@ const MD = (() => {
       const t = inlineMd(n).trim();
       if (t) push(t);
     });
-    return out.join('\n').replace(/\n{3,}/g, '\n\n').trim() + '\n';
+    return out.join('\n').replace(/\n{3,}/g, '\n\n').trim()
+      .replace(/^---\n\n(title:[^\n]*)\n\n---\n\n/i, '---\n$1\n---\n') + '\n';
   }
 
   return { toDom, fromDom, paintImage, illuCard };

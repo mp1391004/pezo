@@ -6,7 +6,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 
-from .mdparse import any_block
+from .mdparse import any_block, split_front
 
 NAVY = RGBColor(0x0B, 0x1F, 0x4D)
 BLUE = RGBColor(0x12, 0x61, 0xF5)
@@ -64,6 +64,9 @@ def md_to_docx(md: str, images=None, title_fallback="Nội dung"):
     st = doc.styles["Normal"]
     st.font.name = "Calibri"; st.font.size = Pt(11.5)
 
+    title, md = split_front(md)
+    if title:
+        doc.add_heading(title, level=0)
     lines = (md or "").splitlines()
     sec_i = 0          # dem muc theo thu tu xuat hien, khop voi mdparse
     cur_sec = None
