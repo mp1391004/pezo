@@ -17,8 +17,8 @@ WORK.mkdir(exist_ok=True)
 # -> truoc day gui model "" len Kyma va anh nao cung loi.
 DEFAULT_TEXT_MODEL = os.environ.get("TEXT_MODEL") or "gemini-3.7-flash"
 SCRIPT_MODEL = os.environ.get("SCRIPT_MODEL") or "gemini-3.5-flash-lite"
-# Uu tien GPT Image 2.6 Flare khi Kyma co; chua co thi dung GPT Image 2.
-IMAGE_PREFER = [m for m in [os.environ.get("IMAGE_MODEL"), "gpt-image-2.6-flare", "gpt-image-2"] if m]
+# Mac dinh GPT Image 2.5 Flare; Kyma khong co thi dung GPT Image 2.
+IMAGE_PREFER = [m for m in [os.environ.get("IMAGE_MODEL"), "gpt-image-2.5-flare", "gpt-image-2"] if m]
 
 
 
