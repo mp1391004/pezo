@@ -5,8 +5,8 @@ const JSZip=require('jszip');
 const {Document,Packer,Paragraph,TextRun,HeadingLevel,ImageRun,AlignmentType}=require('docx');
 
 const TEXT_MODEL=process.env.TEXT_MODEL||'gemini-3.7-flash';
-// Uu tien GPT Image 2.6 Flare khi Kyma co, chua co thi dung GPT Image 2
-const IMAGE_PREFER=[process.env.IMAGE_MODEL,'gpt-image-2.6-flare','gpt-image-2'].filter(Boolean);
+// Mac dinh GPT Image 2.5 Flare (nhanh, re: $0.019/anh); Kyma khong co thi dung GPT Image 2
+const IMAGE_PREFER=[process.env.IMAGE_MODEL,'gpt-image-2.5-flare','gpt-image-2'].filter(Boolean);
 const IMAGE_SKIP=new Set(['flux-kontext-pro','recraft-v4-vector']); // can anh goc / ra SVG
 const IMG_PER_KEY=Number(process.env.IMG_PER_KEY||2); // Kyma Tier 0 chi chay 2 anh cung luc
 const SCRIPT_MODEL=process.env.SCRIPT_MODEL||'gemini-3.5-flash-lite';
