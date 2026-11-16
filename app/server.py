@@ -13,9 +13,25 @@ ROOT = Path(__file__).parent.parent
 WORK = ROOT / "runs"
 WORK.mkdir(exist_ok=True)
 
-DEFAULT_TEXT_MODEL = os.environ.get("TEXT_MODEL", "gemini-3.7-flash")
-IMAGE_MODEL = os.environ.get("IMAGE_MODEL", "gpt-image-2")
-SCRIPT_MODEL = os.environ.get("SCRIPT_MODEL", "gemini-3.5-flash-lite")
+# `or` thay vi default cua .get(): file .env de trong (IMAGE_MODEL=) tra ve chuoi rong
+# -> truoc day gui model "" len Kyma va anh nao cung loi.
+DEFAULT_TEXT_MODEL = os.environ.get("TEXT_MODEL") or "gemini-3.7-flash"
+SCRIPT_MODEL = os.environ.get("SCRIPT_MODEL") or "gemini-3.5-flash-lite"
+# Uu tien GPT Image 2.6 Flare khi Kyma co; chua co thi dung GPT Image 2.
+IMAGE_PREFER = [m for m in [os.environ.get("IMAGE_MODEL"), "gpt-image-2.6-flare", "gpt-image-2"] if m]
+
+
+
+def kyma_models(kind):
+    return [m for m in kyma.list_models() if m.get("type") == kind]
+
+
+def default_image_model():
+    ids = {m["id"] for m in kyma_models("image")}
+    if not ids:  # khong lay duoc danh sach -> dung model chac chan co
+        return os.environ.get("IMAGE_MODEL") or "gpt-image-2"
+    return next((m for m in IMAGE_PREFER if m in ids), "gpt-image-2")
+
 
 app = FastAPI(title="Pezo")
 
@@ -88,6 +104,7 @@ class RunReq(BaseModel):
     text_model: str = DEFAULT_TEXT_MODEL
     workers: int = 3
     make_images: bool = True
+    image_model: str | None = None
 
 
 class SaveReq(BaseModel):
@@ -129,6 +146,10 @@ def gen_one_image(job, item, model, api_key=None):
 def _set_item(item, **kw):
     with LOCK:
         item.update(kw)
+
+
+def img_model(job):
+    return job.get("image_model") or default_image_model()
 
 
 def run_job(job, text_model, make_images):
@@ -195,7 +216,7 @@ def run_job(job, text_model, make_images):
              stage=f"Đang tạo {len(items)} ảnh minh hoạ" if (items and make_images) else "Xong")
 
         if make_images and items:
-            futs = [IMG_POOL.submit(gen_one_image, job, it, IMAGE_MODEL) for it in items]
+            futs = [IMG_POOL.submit(gen_one_image, job, it, img_model(job)) for it in items]
             for f in futs:
                 f.result()
         _set(job, status="done", stage="Xong — mời rà soát nội dung", elapsed=int(_t.time() - t0))
@@ -212,6 +233,13 @@ def api_run(req: RunReq, x_kyma_key: str = Header("")):
     ok, msg = kyma.probe(key)
     if not ok:
         raise HTTPException(400, msg)
+    text_ids = {m["id"] for m in kyma_models("language")}
+    image_ids = {m["id"] for m in kyma_models("image")}
+    if text_ids and req.text_model not in text_ids:
+        raise HTTPException(400, f"Model nội dung '{req.text_model}' không còn trên Kyma, chọn model khác.")
+    image_model = req.image_model or default_image_model()
+    if req.make_images and image_ids and image_model not in image_ids:
+        raise HTTPException(400, f"Model ảnh '{image_model}' không có trên Kyma, chọn model khác.")
     run_id = uuid.uuid4().hex[:8]
     rdir = WORK / run_id
     rdir.mkdir(parents=True, exist_ok=True)
@@ -225,7 +253,7 @@ def api_run(req: RunReq, x_kyma_key: str = Header("")):
             "transcript": t.get("text", ""), "status": "queued", "stage": "Đang chờ",
             "script": "", "content_md": "", "illustrations": [], "error": None,
             "started": None, "elapsed": 0, "warnings": [], "interrupted": False,
-            "text_model": req.text_model, "api_key": key,
+            "text_model": req.text_model, "image_model": image_model, "api_key": key,
         })
     RUNS[run_id] = {"id": run_id, "dir": str(rdir), "jobs": jobs}
 
@@ -300,7 +328,7 @@ def api_resync(job_id: str, x_kyma_key: str = Header("")):
     key = job_key(j, x_kyma_key)
 
     def work():
-        futs = [IMG_POOL.submit(gen_one_image, j, it, IMAGE_MODEL, key) for it in todo]
+        futs = [IMG_POOL.submit(gen_one_image, j, it, img_model(j), key) for it in todo]
         for f in futs: f.result()
         _set(j, status="done", stage="Xong")
     POOL.submit(work)
@@ -323,7 +351,7 @@ def api_regen(job_id: str, filename: str, x_kyma_key: str = Header("")):
     key = job_key(j, x_kyma_key)
 
     def work():
-        gen_one_image(j, it, IMAGE_MODEL, key)
+        gen_one_image(j, it, img_model(j), key)
         _set(j, status="done", stage="Xong")
     POOL.submit(work)
     return {"ok": True}
@@ -496,7 +524,20 @@ def api_download_job(job_id: str):
 
 @app.get("/api/models")
 def api_models():
-    return {"text_model": DEFAULT_TEXT_MODEL, "image_model": IMAGE_MODEL,
+    def slim(m):
+        p = m.get("pricing") or {}
+        price = (f"${p['per_image_usd']}/ảnh" if p.get("per_image_usd") is not None else
+                 f"${p.get('input')}/${p.get('output')} per 1M tok" if p.get("input") is not None else "")
+        return {"id": m["id"], "name": m.get("name") or m["id"], "owner": m.get("owned_by", ""),
+                "price": price, "speed": m.get("speed") or "", "stage": m.get("release_stage") or "",
+                "recommended": bool(m.get("recommended"))}
+    text = [slim(m) for m in kyma_models("language")]
+    image = [slim(m) for m in kyma_models("image") if m["id"] not in ("flux-kontext-pro", "recraft-v4-vector")]
+    # flux-kontext-pro can anh goc; recraft-v4-vector ra SVG, khong chen vao docx duoc
+    text.sort(key=lambda m: (m["owner"], m["id"]))
+    image.sort(key=lambda m: (m["owner"], m["id"]))
+    return {"text_model": DEFAULT_TEXT_MODEL, "image_model": default_image_model(),
+            "text_models": text, "image_models": image,
             "server_key": bool(os.environ.get("KYMA_API_KEY"))}
 
 
