@@ -24,7 +24,7 @@ const PEZO = (() => {
   function headers(extra) {
     const t = textApi();
     const h = { 'X-Kyma-Key': get() };
-    if (t) Object.assign(h, { 'X-Text-Base': t.base, 'X-Text-Key': t.key, 'X-Text-Model': t.model });
+    if (t) Object.assign(h, { 'X-Text-Base': t.base, 'X-Text-Key': t.key, 'X-Text-Model': t.model, 'X-Text-Format': t.format || 'openai' });
     return Object.assign(h, extra || {});
   }
   async function post(url, body, isForm) {
@@ -53,13 +53,13 @@ const PEZO = (() => {
         <div class="set-bar">
           <span class="ok-dot" style="${textApi() ? '' : 'background:#c5cbd6'}"></span>
           <b>API viết nội dung</b>
-          <code>${textApi() ? esc(textApi().model) + ' · ' + esc(new URL(textApi().base).host) : 'chưa cài — đang dùng Kyma'}</code>
+          <code>${textApi() ? esc(textApi().model) + ' · ' + esc(new URL(textApi().base).host) + (textApi().format === 'anthropic' ? ' · Anthropic' : '') : 'chưa cài — đang dùng Kyma'}</code>
           <span style="flex:1"></span>
           <button class="ghost sm" id="tapi-open">${textApi() ? 'Sửa' : 'Cài API khác'}</button>
         </div>
         <div class="set-box" id="tapi-box" style="display:none">
           <h2>API khác để viết nội dung</h2>
-          <p class="muted">Dùng khi bạn mua API ở nơi khác (vd Claude). Cần địa chỉ API dạng OpenAI (thường kết thúc bằng <code>/v1</code>), key và đúng tên model bên đó. Ảnh vẫn tạo qua Kyma. Thông tin chỉ lưu trên trình duyệt này.</p>
+          <p class="muted">Dùng khi bạn mua API ở nơi khác (vd Claude). Điền địa chỉ API (thường kết thúc bằng <code>/v1</code>), key và đúng tên model bên đó. Pezo tự nhận định dạng OpenAI hoặc Anthropic (Claude). Ảnh vẫn tạo qua Kyma. Thông tin chỉ lưu trên trình duyệt này.</p>
           <div class="set-row"><input id="tapi-base" placeholder="https://api.ten-ben-ban.com/v1" spellcheck="false" autocomplete="off"></div>
           <div class="set-row"><input id="tapi-key" placeholder="Key (sk-...)" spellcheck="false" autocomplete="off"></div>
           <div class="set-row"><input id="tapi-model" placeholder="Tên model, vd claude-sonnet-4-5" spellcheck="false" autocomplete="off"><button id="tapi-save">Lưu</button><button class="ghost" id="tapi-del">Gỡ</button></div>
@@ -96,7 +96,7 @@ const PEZO = (() => {
           let r; try { r = await (await fetch('/api/check-text-api', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(v) })).json(); } catch (e) { r = { ok: false, message: 'Không gọi được server' }; }
           sv.disabled = false; sv.textContent = 'Lưu';
           if (!r.ok) { msg.className = 'err-line'; msg.textContent = r.message; return; }
-          setTextApi(v); location.reload();
+          v.format = r.format || 'openai'; setTextApi(v); location.reload();
         };
       };
       const open = document.getElementById('set-open');
