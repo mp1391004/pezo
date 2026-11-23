@@ -59,12 +59,15 @@ async function tick(){
   let d;
   try{
     const r=await fetch('/api/status/'+runId);
-    if(!r.ok) throw new Error(r.status===404?'Phiên này không còn trên server (server đã khởi động lại). Kết quả cũ vẫn nằm trong thư mục runs/.':'Lỗi '+r.status);
+    if(r.status===404){ clearInterval(poll); poll=null; stat.innerHTML='<span style="color:var(--dan)">Phiên này không còn trên server. Chạy lại transcript mới.</span>'; return; }
+    if(!r.ok) throw new Error('Lỗi '+r.status);
     d=await r.json();
     if(!d.jobs) throw new Error('Dữ liệu không hợp lệ');
+    tick.fails=0;
   }catch(e){
-    clearInterval(poll); poll=null;
-    stat.innerHTML='<span style="color:var(--dan)">'+e.message+'</span>';
+    /* rớt mạng tạm thời: không dừng, vòng sau tự hỏi lại */
+    tick.fails=(tick.fails||0)+1;
+    stat.innerHTML='<span style="color:var(--dan)">Mất kết nối tạm thời, đang thử lại… ('+tick.fails+')</span>';
     return;
   }
   jobs=d.jobs; renderSide();
