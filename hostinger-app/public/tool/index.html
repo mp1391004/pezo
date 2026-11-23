@@ -47,9 +47,19 @@ function fillSelect(sel, list, def, saved){
   const ids=list.map(m=>m.id);
   sel.value = ids.includes(saved) ? saved : (ids.includes(def) ? def : ids[0]);
 }
+/* "API khac" (vd Claude mua ngoai) luon hien, ke ca khi Kyma loi */
+function addCustom(sv){
+  const ta = PEZO.textApi(); if (!ta || model.querySelector('option[value="__custom__"]')) return;
+  const g = document.createElement('optgroup'); g.label = 'API khác (đã cài)';
+  const o = document.createElement('option'); o.value = '__custom__'; o.textContent = 'API khác · ' + ta.model;
+  g.appendChild(o); model.insertBefore(g, model.firstChild);
+  if (!sv || sv.text === '__custom__' || !sv.text) model.value = '__custom__';
+}
+(()=>{ let sv={}; try{ sv=JSON.parse(localStorage.getItem(LSM)||'{}') }catch(e){} addCustom(sv); })();
 fetch('/api/models').then(r=>r.json()).then(m=>{
   let sv={}; try{ sv=JSON.parse(localStorage.getItem(LSM)||'{}') }catch(e){}
   fillSelect(model, m.text_models, m.text_model, sv.text);
+  addCustom(sv);
   fillSelect(imgmodel, m.image_models, m.image_model, sv.image);
   modelinfo.textContent='ảnh: '+(imgmodel.value||m.image_model);
 }).catch(()=>{});

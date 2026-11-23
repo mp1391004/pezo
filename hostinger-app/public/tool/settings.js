@@ -14,10 +14,18 @@ const PEZO = (() => {
   const get = () => { try { return localStorage.getItem(LS) || ''; } catch (e) { return ''; } };
   const set = v => { try { localStorage.setItem(LS, v); } catch (e) {} };
   const clear = () => { try { localStorage.removeItem(LS); } catch (e) {} };
+  /* API khac de viet noi dung (vd Claude mua ngoai): {base, key, model}, chi luu tren trinh duyet */
+  const LT = 'pezo_text_api';
+  const textApi = () => { try { const v = JSON.parse(localStorage.getItem(LT) || 'null'); return v && v.base && v.key && v.model ? v : null; } catch (e) { return null; } };
+  const setTextApi = v => { try { v ? localStorage.setItem(LT, JSON.stringify(v)) : localStorage.removeItem(LT); } catch (e) {} };
+  const esc = x => String(x).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
   /* Them key vao moi request goi AI */
   function headers(extra) {
-    return Object.assign({ 'X-Kyma-Key': get() }, extra || {});
+    const t = textApi();
+    const h = { 'X-Kyma-Key': get() };
+    if (t) Object.assign(h, { 'X-Text-Base': t.base, 'X-Text-Key': t.key, 'X-Text-Model': t.model });
+    return Object.assign(h, extra || {});
   }
   async function post(url, body, isForm) {
     const opt = { method: 'POST', headers: headers(isForm ? {} : { 'Content-Type': 'application/json' }) };
@@ -41,6 +49,21 @@ const PEZO = (() => {
           <code>${mask(key)}</code>
           <span style="flex:1"></span>
           <button class="ghost sm" id="set-open">Cài đặt</button>
+        </div>
+        <div class="set-bar">
+          <span class="ok-dot" style="${textApi() ? '' : 'background:#c5cbd6'}"></span>
+          <b>API viết nội dung</b>
+          <code>${textApi() ? esc(textApi().model) + ' · ' + esc(new URL(textApi().base).host) : 'chưa cài — đang dùng Kyma'}</code>
+          <span style="flex:1"></span>
+          <button class="ghost sm" id="tapi-open">${textApi() ? 'Sửa' : 'Cài API khác'}</button>
+        </div>
+        <div class="set-box" id="tapi-box" style="display:none">
+          <h2>API khác để viết nội dung</h2>
+          <p class="muted">Dùng khi bạn mua API ở nơi khác (vd Claude). Cần địa chỉ API dạng OpenAI (thường kết thúc bằng <code>/v1</code>), key và đúng tên model bên đó. Ảnh vẫn tạo qua Kyma. Thông tin chỉ lưu trên trình duyệt này.</p>
+          <div class="set-row"><input id="tapi-base" placeholder="https://api.ten-ben-ban.com/v1" spellcheck="false" autocomplete="off"></div>
+          <div class="set-row"><input id="tapi-key" placeholder="Key (sk-...)" spellcheck="false" autocomplete="off"></div>
+          <div class="set-row"><input id="tapi-model" placeholder="Tên model, vd claude-sonnet-4-5" spellcheck="false" autocomplete="off"><button id="tapi-save">Lưu</button><button class="ghost" id="tapi-del">Gỡ</button></div>
+          <div id="tapi-msg" class="muted"></div>
         </div>` : `
         <div class="set-box">
           <h2>Cài đặt trước khi dùng</h2>
@@ -57,6 +80,25 @@ const PEZO = (() => {
           <div id="set-msg" class="muted"></div>
         </div>`;
 
+      const topen = document.getElementById('tapi-open');
+      if (topen) topen.onclick = () => {
+        const box = document.getElementById('tapi-box'), cur = textApi() || {};
+        box.style.display = box.style.display === 'none' ? 'block' : 'none';
+        document.getElementById('tapi-base').value = cur.base || '';
+        document.getElementById('tapi-key').value = cur.key || '';
+        document.getElementById('tapi-model').value = cur.model || '';
+        const msg = document.getElementById('tapi-msg'), sv = document.getElementById('tapi-save');
+        document.getElementById('tapi-del').onclick = () => { setTextApi(null); location.reload(); };
+        sv.onclick = async () => {
+          const v = { base: document.getElementById('tapi-base').value.trim().replace(/\/+$/, ''), key: document.getElementById('tapi-key').value.trim(), model: document.getElementById('tapi-model').value.trim() };
+          if (!v.base || !v.key || !v.model) { msg.className = 'err-line'; msg.textContent = 'Điền đủ 3 ô.'; return; }
+          sv.disabled = true; sv.innerHTML = '<span class="spin"></span> Đang thử'; msg.className = 'muted'; msg.textContent = 'Đang gọi thử API…';
+          let r; try { r = await (await fetch('/api/check-text-api', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(v) })).json(); } catch (e) { r = { ok: false, message: 'Không gọi được server' }; }
+          sv.disabled = false; sv.textContent = 'Lưu';
+          if (!r.ok) { msg.className = 'err-line'; msg.textContent = r.message; return; }
+          setTextApi(v); location.reload();
+        };
+      };
       const open = document.getElementById('set-open');
       if (open) open.onclick = () => { clear(); render(); };
 
@@ -87,5 +129,5 @@ const PEZO = (() => {
     render();
   }
 
-  return { get, set, clear, headers, post, mount, hasKey: () => !!get() };
+  return { get, set, clear, headers, post, mount, textApi, hasKey: () => !!get() };
 })();
